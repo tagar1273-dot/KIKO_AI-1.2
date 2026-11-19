@@ -39,22 +39,51 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Verify Android app module
+      - name: Locate Android project
+        id: project
+        shell: bash
         run: |
-          echo "Checking Android project..."
-          test -f settings.gradle.kts
-          test -f app/build.gradle.kts
-          test -f app/src/main/AndroidManifest.xml
-          echo "Android app module found!"
+          echo "Searching for Android project..."
 
-      - name: Build Debug APK
-        run: gradle :app:assembleDebug --stacktrace
+          SETTINGS=$(find . -type f \
+            \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -not -path '*/.gradle/*' \
+            -not -path '*/build/*' | head -n 1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: settings.gradle not found"
+            find . -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          echo "Project folder: $PROJECT_DIR"
+
+          if [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ] && \
+             [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
+            echo "ERROR: Android app module not found"
+            find "$PROJECT_DIR" -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          if [ ! -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml" ]; then
+            echo "ERROR: AndroidManifest.xml not found"
+            exit 1
+          fi
+
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Android project successfully located!"
+
+      - name: Build KIKO AI APK
+        run: |
+          gradle -p "${{ steps.project.outputs.project_dir }}" \
+            :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: KIKO-AI-Android-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: "**/build/outputs/apk/debug/*.apk"
           if-no-files-found: error
           retention-days: 30
           
