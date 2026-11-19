@@ -5,14 +5,12 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  build-debug:
+  build:
     name: Build KIKO AI APK
     runs-on: ubuntu-latest
 
@@ -32,7 +30,7 @@ jobs:
           accept-android-sdk-licenses: true
           packages: platform-tools
 
-      - name: Install Android SDK packages
+      - name: Install SDK packages
         run: |
           sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
@@ -41,27 +39,22 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Find Android project
-        id: locate
+      - name: Verify Android app module
         run: |
-          FILE=$(find . -type f \( -name settings.gradle -o -name settings.gradle.kts \) -not -path '*/.gradle/*' | head -n 1)
-          if [ -z "$FILE" ]; then
-            echo "ERROR: Android Gradle project not found!"
-            exit 1
-          fi
-          DIR=$(dirname "$FILE")
-          echo "project_dir=$DIR" >> "$GITHUB_OUTPUT"
-          echo "Found project: $DIR"
+          echo "Checking Android project..."
+          test -f settings.gradle.kts
+          test -f app/build.gradle.kts
+          test -f app/src/main/AndroidManifest.xml
+          echo "Android app module found!"
 
       - name: Build Debug APK
-        working-directory: ${{ steps.locate.outputs.project_dir }}
-        run: gradle assembleDebug --stacktrace
+        run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: KIKO-AI-Android-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
           
